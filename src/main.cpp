@@ -61,13 +61,13 @@ void setup() {
 
   display.begin(); // Initialised the display
   delay(200);
-  display.clearDisplay(); //Clears the buffer
-  display.setTextSize(1);
-  display.setFont(&FreeSans9pt7b);
-  display.setTextColor(EPD_RED);
-  display.setCursor(0, 0);
-  display.print("Welcome Comrade");
-  display.display();
+  //display.clearDisplay(); //Clears the buffer
+  //display.setTextSize(1);
+  //display.setFont(&FreeSans9pt7b);
+  //display.setTextColor(EPD_RED);
+  //display.setCursor(0, 0);
+  //display.print("Welcome Comrade");
+  //display.display();
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -82,6 +82,7 @@ void setup() {
   delay(1000);
 
 }
+
 
 
 void loop()
@@ -140,6 +141,7 @@ void loop()
   float Speed = doc["wind"]["speed"];
   float longitude = doc["coord"]["lon"];
   float latitude = doc["coord"]["lat"];
+  String forecast = doc["weather"]["description"];
 
   Serial.println();
   Serial.print("Country: ");
@@ -153,14 +155,18 @@ void loop()
   Serial.printf("Wind speed: %.1f m/s\r\n", Speed);
   Serial.printf("Longitude: %.2f\r\n", longitude);
   Serial.printf("Latitude: %.2f\r\n", latitude);
+  Serial.printf("Forecast is: ");
+  Serial.println(forecast);
 
+ 
   display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0);
+  display.setCursor(0, 12);
+  display.setFont(&FreeSans9pt7b);
   display.setTextColor(EPD_RED);
-  display.print("Location: ");
+  display.setTextSize(1);
+  display.print("Todays weather for: ");
   display.println(location);
-  display.setTextColor(EPD_BLACK);
+  void drawLine(uint16_t x13, uint16_t y0, uint16_t x30, uint16_t y1, uint16_t black); //draw a black border around the screen
   display.print("Temp: ");
   display.print(temperature);
   display.print((char)247);
@@ -177,18 +183,10 @@ void loop()
   display.print(" & ");
   display.print("Long: ");
   display.println(longitude);
-  display.setTextColor(EPD_RED);
-  display.print("Forecast: ");
-  display.print(weather);
-  display.setTextSize(1);
-  display.println("MiG ACS-1 Weather Station ");
-
-
-
-
-
+  display.print("Forecast looks like: ");
+  display.setTextColor(EPD_BLACK);
+  display.println(forecast);
+  
   display.display();
-
   delay(1.8e+6);
-
 }
