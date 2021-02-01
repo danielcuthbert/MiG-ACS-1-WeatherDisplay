@@ -4,7 +4,7 @@ The Russian ACS-1 aircraft clock is just sexy. It was made for numerous Soviet f
 
 Having been given one as a present from friends in Russia, I wanted to design both a housing for it and add a modern weather station utilising the ESP32 dev board and the new Adafruit 2.9" Diagonal E-Ink display. 
 
-<img src="images/combo.jpg" style="zoom:33%;" />
+<img src="images/combo.png" style="zoom:33%;" />
 
 The housing was designed in AutoCAD and makes use of clear perspect to show off the internals of both the clock and the ESP32 and wiring
 
