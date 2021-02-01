@@ -11,6 +11,8 @@
 #include "credentials.h"   // where we store secrets
 #include <Fonts/FreeSans9pt7b.h>
 #include "time.h"
+#include <Fonts/FreeMonoBold12pt7b.h>
+#include "epaper_fonts.h"
 
 
 /*
@@ -35,7 +37,41 @@
 #define EPD_RESET  32 // can set to -1 and share with microcontroller Reset!
 #define EPD_BUSY   14 // can set to -1 to not use a pin (will wait a fixed delay)
 Adafruit_IL0373 display(296, 128, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+#define SCREEN_WIDTH  296
+#define SCREEN_HEIGHT 
+enum alignment {LEFT, RIGHT, CENTER};
 
+/*
+* Here we set up stuff to better display the results from the API
+*/
+void drawString(int x, int y, String text, alignment align) {
+  int16_t  x1, y1; //the bounds of x,y and w and h of the variable 'text' in pixels.
+  uint16_t w, h;
+  display.setTextWrap(false);
+  display.getTextBounds(text, x, y, &x1, &y1, &w, &h);
+  if (align == RIGHT)  x = x - w;
+  if (align == CENTER) x = x - w / 2;
+  display.setCursor(x, y + h);
+  display.print(text);
+}
+
+/*
+* Sorting out alignment issues - a work in progress
+*/
+void drawStringMaxWidth(int x, int y, unsigned int text_width, String text, alignment align) {
+  int16_t  x1, y1; //the bounds of x,y and w and h of the variable 'text' in pixels.
+  uint16_t w, h;
+  if (text.length() > text_width * 2) text = text.substring(0, text_width * 2); // Truncate if too long for 2 rows of text
+  display.getTextBounds(text, x, y, &x1, &y1, &w, &h);
+  if (align == RIGHT)  x = x - w;
+  if (align == CENTER) x = x - w / 2;
+  display.setCursor(x, y);
+  display.println(text.substring(0, text_width));
+  if (text.length() > text_width) {
+    display.setCursor(x, y + h);
+    display.println(text.substring(text_width));
+  }
+}
 
 /*
  * Here we store the converted images 
@@ -99,7 +135,6 @@ const unsigned char Wind [] PROGMEM = {
 
 /*
  * Setting up the WiFi & OpenWeatherMap API and time
- *
  */
 
 bool id = false;
@@ -234,13 +269,18 @@ void loop()
  display.setFont(&FreeSans9pt7b);
  display.setTextColor(EPD_BLACK);
  display.setTextSize(1);
- display.print("Todays weather for: ");
- display.println(location);
+
+ void drawRect(uint16_t x0, uint16_t y0, uint16_t w, uint16_t h, uint16_t color);
+ void fillRect(uint16_t x0, uint16_t y0, uint16_t w, uint16_t h, uint16_t color);
+ //display.print("Todays weather for: ");
+ //display.println(location);
+ drawString(SCREEN_WIDTH / 2, 2, location, CENTER);
+ 
  display.drawLine(0, 22, 296, 22, EPD_BLACK);
  display.setCursor(0, 45);
  display.setTextColor(EPD_RED);
  display.setTextSize(1);
- //display.drawBitmap(0, 30, HighTemperature, 16, 16, EPD_BLACK);
+ 
  display.print("Temp: ");
  display.print(temperature, 1);
  display.print((char)248);
