@@ -1,5 +1,6 @@
 /***************************************************
  Weather station code for a Russian ACS-1 Mig-25
+ Version 0.4
  ****************************************************/
 
 #include <Arduino.h>
@@ -10,36 +11,41 @@
 #include <ArduinoJson.h>   // Needed to format
 #include "credentials.h"   // where we store secrets
 #include <Fonts/FreeSans9pt7b.h>
-#include "time.h"
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include "epaper_fonts.h"
+#include <ezTime.h> //brilliant time library
+
 
 
 /*
- * Setting up the 2.9 E-ink Display. This is with a ESP32 Dev Board with the following pinout
- * VIN --> 3V3
- * GND --> GND
- * SCK --> 18
- * MISO --> 19
- * MOSI --> 23
- * ECS --> 33
- * D/C --> 12
- * SRCS --> 27
- * RST --> 32
- * BUSY --> 14
- *
+ Setting up the 2.9 E-ink Display. This is with a ESP32 Dev Board with the following pinout
+ VIN --> 3V3
+ GND --> GND
+ SCK --> 18
+ MISO --> 19
+ MOSI --> 23
+ ECS --> 33
+ D/C --> 12
+ SRCS --> 27
+ RST --> 32
+ BUSY --> 14
  */
 
 
 #define EPD_CS     33
 #define EPD_DC     12
 #define SRAM_CS    27
-#define EPD_RESET  32 // can set to -1 and share with microcontroller Reset!
-#define EPD_BUSY   14 // can set to -1 to not use a pin (will wait a fixed delay)
-Adafruit_IL0373 display(296, 128, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+#define EPD_RESET  32 
+#define EPD_BUSY   14 
 #define SCREEN_WIDTH  296
-#define SCREEN_HEIGHT 
+#define SCREEN_HEIGHT 128
+#define UK_POSIX	"BST0GMT,M3.2.0/2:00:00,M11.1.0/2:00:00"
 enum alignment {LEFT, RIGHT, CENTER};
+Adafruit_IL0373 display(296, 128, EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+Timezone local;
+Timezone UK;
+
+
 
 /*
 * Here we set up stuff to better display the results from the API
@@ -143,25 +149,12 @@ char servername[] = "api.openweathermap.org";
 unsigned long lastTime = 0;
 unsigned long timerDelay = 1.8e+6; // Let's check every 30 minutes
 String result;
-// updating every hour rather than hammering the API
-const unsigned long SECOND = 1000; 
-const unsigned long HOUR = 3600*SECOND;
-const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 0;
-const int   daylightOffset_sec = 3600;
+void updateNTP();
 
-void printLocalTime()
-  {
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo))
-    {
-      Serial.println("Failed to obtain time");
-      return;
-    }
-    Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-    
-  }
 
+ /*
+The main setup() function is called once at startup. 
+ */
 
 void setup() {
   Serial.begin(115200);
@@ -182,19 +175,20 @@ void setup() {
   Serial.println("Your IP address is: ");
   Serial.println(WiFi.localIP());
   Serial.println("Connected ");
-  Serial.println("IP Address: ");
-  Serial.println(WiFi.localIP());
 
     //Grab the time from the NTP server and print it 
-    //TODO: work out how to make this display via display.print 
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  printLocalTime();
-  delay(1000);
-
+  UK.setLocation("Europe/London");
 }
+
+
+ /*
+The main loop() function is called repeatedly.
+ */
+
 
 void loop()
 {
+  Serial.println("Connecting to the weather API()");
   if (client.connect(servername, 80))
   { //starts client connection, checks for connection
     client.println("GET /data/2.5/weather?id=" + cityID + "&units=metric&APPID=" + apikey);
@@ -202,6 +196,7 @@ void loop()
     client.println("User-Agent: ArduinoWiFi/1.1");
     client.println("Connection: close");
     client.println();
+    events();
   }
   else {
     Serial.println("connection failed");
@@ -211,45 +206,54 @@ void loop()
   while (client.connected() && !client.available())
     delay(1);                                          //patience young skywalker
   while (client.connected() || client.available())
-  { //connected or data available
-    char c = client.read();                     //grabs the next byte from the connected stream
+
+ /*
+Once we have the data from the Weather API, we store it in a String called result.
+This grabs the next byte from the connected stream. 
+There was a bug where I didn't clear the results string, which resulted in it getting filled and not updating
+ */
+
+  { 
+    char c = client.read();                     
     result = result + c;
   }
 
   client.stop();
   result.replace('[', ' ');
   result.replace(']', ' ');
-  //Serial.println(result);
   char jsonArray [result.length() + 1];
   result.toCharArray(jsonArray, sizeof(jsonArray));
   jsonArray[result.length() + 1] = '\0';
   StaticJsonDocument<1024> doc;
   DeserializationError  error = deserializeJson(doc, jsonArray);
+  result.clear(); 
+  Serial.println("Clearing the result buffer");
 
-
-  if (error) {
+  if (error) 
+  {
     Serial.print(F("deserializeJson() failed with code "));
     Serial.println(error.c_str());
     return;
   }
 
 
-
-
  /*
-  * Getting ready to work with the API results
+Getting ready to work with the API results
  */
 
- String location = doc["name"];
- String country = doc["sys"]["country"];
+ const char *location = doc["name"];
+ const char *country = doc["sys"]["country"];
  int temperature = doc["main"]["temp"];
  int humidity = doc["main"]["humidity"];
- String weather = doc["main"]["description"];
  int id = doc["id"];
  float Speed = doc["wind"]["speed"];
  int Feelslike = doc["main"]["feels_like"];
- String forecast = doc["weather"]["description"];
+ const char *forecast = doc["weather"]["description"];
 
+ /*
+ Here we are just printing to serial to make sure all is good
+ */
+ 
  Serial.println();
  Serial.print("Country: ");
  Serial.println(country);
@@ -263,18 +267,20 @@ void loop()
  Serial.printf("Forecast is: ");
  Serial.println(forecast);
 
+ /*
+Start preparing the display by clearing it and setting the font/size/colour etc. 
+ */
+
  display.clearDisplay();
  void drawLine(uint16_t x13, uint16_t y0, uint16_t x30, uint16_t y1, uint16_t black); //draw a black border around the screen
- display.setCursor(0, 12);
+ display.setCursor(2, 12);
  display.setFont(&FreeSans9pt7b);
  display.setTextColor(EPD_BLACK);
  display.setTextSize(1);
 
  void drawRect(uint16_t x0, uint16_t y0, uint16_t w, uint16_t h, uint16_t color);
  void fillRect(uint16_t x0, uint16_t y0, uint16_t w, uint16_t h, uint16_t color);
- //display.print("Todays weather for: ");
- //display.println(location);
- drawString(SCREEN_WIDTH / 2, 2, location, CENTER);
+ drawString(SCREEN_WIDTH / 4, 2, UK.dateTime(), CENTER);
  
  display.drawLine(0, 22, 296, 22, EPD_BLACK);
  display.setCursor(0, 45);
@@ -285,7 +291,6 @@ void loop()
  display.print(temperature, 1);
  display.print((char)248);
  display.print("C & ");
- //display.drawBitmap(60, 30, HumiditySymbol, 16, 16, EPD_BLACK);
  display.print("Humidity: ");
  display.print(humidity);
  display.println("% ");
@@ -301,7 +306,7 @@ void loop()
  display.print("Forecast looks like: ");
  display.setTextColor(EPD_BLACK);
  display.println(forecast);
- //display.drawBitmap(250, 110, PartiallyCloudy, 24, 24, EPD_BLACK);
  display.display();
- delay(3.6e+6);
+ delay(10*60*1000UL);
+
 }
